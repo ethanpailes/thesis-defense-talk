@@ -1,10 +1,14 @@
 <!doctype html>
 <html>
 	<head>
+<!-- --------------------------------------------------------------------
+                             REVEAL.JS HEADER
+     -------------------------------------------------------------------- -->
+
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
-		<title>reveal.js</title>
+		<title>Skip Regex</title>
 
 		<link rel="stylesheet" href="css/reveal.css">
 		<link rel="stylesheet" href="css/theme/black.css">
@@ -24,24 +28,240 @@
 	<body>
 		<div class="reveal">
 			<div class="slides">
-				<section>Slide 1</section>
-				<section>Slide 2</section>
+
+<!-- --------------------------------------------------------------------
+                           MOTIVATION
+     -------------------------------------------------------------------- -->
+
+<section>
+    <h1>Skip Regex: Parsing without Deciding</h1>
+    Ethan Pailes
+</section>
+
+<section>
+    <h2>Talk Roadmap</h2>
+    <ol>
+        <span class="fragment"><li>Partial Parsing</li></span>
+        <span class="fragment"><li>NFA Simulation Background</li></span>
+        <span class="fragment"><li>Optimizations</li></span>
+        <span class="fragment"><li>Simulation Changes</li></span>
+        <span class="fragment"><li>Evaluation</li></span>
+        <span class="fragment"><li>Wrap Up</li></span>
+    </ol>
+    <aside class="notes">
+        This talk is about optimizations to regex NFA simulations.
+        Before I get into that I'm going to spend a bit of time
+        going over the problem I'm trying to solve, then I'm going
+        to give you a whirlwind tour of how fast NFA simulations
+        are implemented in practice.  Once you understand that,
+        you will have enough context to understand the optimizations
+        that I've implemented and the modifications to the simulation
+        algorithms that I had to make. Next, I'll try to convince you
+        that the optimizations are worthwhile with numbers and stories.
+        I'll wrap up with some research context and future directions.
+    </aside>
+</section>
+
+<section id="parsing-just-enough">
+    <h2>Parsing Just Enough</h2>
+    <div class="fragment" data-fragment-index="1">
+        <pre>
+BEGIN:VCARD
+VERSION:3.0
+N:Gump;Forrest;;Mr.;
+FN:<span class="fragment highlight-green"
+         data-fragment-index="2">Forrest Gump</span>
+ORG:Bubba Gump Shrimp Co.
+TITLE:Shrimp Man
+PHOTO;VALUE=URI;TYPE=GIF: <span style="color: yellow;">...</span>
+TEL;TYPE=WORK,VOICE: <span class="fragment highlight-red"
+                           data-fragment-index="3">(111) 555-1212</span>
+TEL;TYPE=HOME,VOICE: <span class="fragment highlight-red"
+                           data-fragment-index="3">(404) 555-1212</span>
+<span style="color: yellow;">...</span>
+EMAIL:forrestgump@example.com
+REV:2008-04-24T19:52:43Z
+END:VCARD
+        </pre>
+    </div>
+
+    <aside class="notes">
+        While I ended up very focused on regex, this work started
+        off because of some work that Kathleen and Nate have done
+        in the context of PADS and Forest, two data description
+        languages. PADS can already parse ad-hoc data formats
+        pretty well, but for certain tasks data gets parsed only
+        to be immediately thrown away. For example, suppose I keep
+        my contact list in the standard VCARD format and I want to
+        pull out the full names of everyone that I know. Using
+        PADS as it is, this would involve parsing out all this extra
+        information like phone numbers and then just dropping it on
+        the floor. We wanted to do as little as possible to get that
+        name.
+    </aside>
+</section>
+
+<section id="tree-slide1">
+    <div style="height: 500px; width: 1000px;"
+         class="fig-container"
+         data-file="fig/parse-tree-subset1.html">
+    </div>
+
+    <aside class="notes">
+        Here is a partial parse tree for that VCARD data I just
+        showed you.
+    </aside>
+</section>
+
+<section id="tree-slide2">
+    <div style="height: 500px; width: 1000px;"
+         class="fig-container"
+         data-file="fig/parse-tree-subset2.html">
+    </div>
+
+    <aside class="notes">
+        In an ideal world we would have an oracle that tells us where
+        we have to go in order to get the interesting bits.
+    </aside>
+</section>
+
+<section id="tree-slide3">
+    <div style="height: 500px; width: 1000px;"
+         class="fig-container"
+         data-file="fig/parse-tree-subset3.html">
+    </div>
+
+    <aside class="notes">
+        Obviously this is impossible. We are going to have to look
+        at some other parts of the data to figure out where what
+        we are interested in begins and ends.
+    </aside>
+</section>
+
+<section id="tree-slide4">
+    <div style="height: 500px; width: 1000px;"
+         class="fig-container"
+         data-file="fig/parse-tree-subset4.html">
+    </div>
+
+    <aside class="notes">
+        In fact, at first it seems worse than that. What if the input
+        is ill formed? It seems like we have to perform a full parse
+        no matter what. We can never do anything clever to skip over
+        bits of the input if we are required to check it for validity.
+    </aside>
+</section>
+
+<section id="impossible">
+    <h2>Partial Parsing is Impossible
+    </h2>
+
+    <aside class="notes">
+        You can't skip any part of the input if you hope to validate it.
+        Time to give up.
+    </aside>
+</section>
+
+<section id="possible">
+    <h2>Partial Parsing is Possible*</h2>
+
+    <aside class="notes">
+        In order to get out of this predicament, I'm going to tack
+        on an asterisk and shift the goal posts. Later
+        I'm going to explain why that shift is actually very
+        reasonable.
+    </aside>
+</section>
+
+<section id="asterix">
+    <h2>*: The Partial Parsing Invariant
+    </h2>
+
+    <p class="fragment">
+        Given a grammar, g, a subset, s, of g to extract and an input
+        <i>in the language of g</i>, a partial parse extracts the part
+        of the input corresponding to s.
+    </p>
+
+    <aside class="notes">
+    </aside>
+</section>
+
+<section id="tree-slide5">
+    <div style="height: 500px; width: 1000px;"
+         class="fig-container"
+         data-file="fig/parse-tree-subset3.html">
+    </div>
+
+    <aside class="notes">
+        Now if we go back to the partial parse tree we have
+        a hope of skipping over those yellow bits.
+    </aside>
+</section>
+
+<section id="partial-regex">
+    <h2>Partially Parsing Regex</h2>
+    <ul>
+        <li>Constrained Semantics</li>
+        <li>Built-In Notion of a Partial Parse</li>
+        <li>A Strict Subset of PADS</li>
+    <ul>
+
+    <aside class="notes">
+        Regex make a great place to start investigating partial
+        parsing. They have a more constrained semantics than PADS,
+        they already have capture groups which encode a desired
+        subset of the input to extract, and they are a part of
+        PADS so we were going to have to deal with them anyway.
+    </aside>
+</section>
+
+<section>
+    <h2>Built-In Partial Parse</h2>
+
+    <p>/a*(c{1,3})x$/</p>
+
+    <p>aaaaaa<span class="fragment highlight-green">cc</span>x</p>
+
+    <aside class="notes">
+        A capture group asks for us to report a particular subsection
+        of matching text. This is pretty much exactly what I mean
+        when I say a subset of the grammar to be partially parsed.
+    </aside>
+</section>
+
+<!-- --------------------------------------------------------------------
+                           NECESSARY BACKGROUND
+     -------------------------------------------------------------------- -->
+
+<!-- TODO: Step Back and Cover the VM approach -->
+<!-- TODO: Talk about the dotstar scan -->
+<!-- TODO: Talk about the elit scan -->
+<!-- TODO: Talk about the literal skip scan -->
+<!-- TODO: Talk about my skip backtracker -->
+
+<!-- --------------------------------------------------------------------
+                             REVEAL.JS FOOTER 
+     -------------------------------------------------------------------- -->
+
 			</div>
 		</div>
 
+
 		<script src="lib/js/head.min.js"></script>
 		<script src="js/reveal.js"></script>
-
 		<script>
-			// More info about config & dependencies:
-			// - https://github.com/hakimel/reveal.js#configuration
-			// - https://github.com/hakimel/reveal.js#dependencies
 			Reveal.initialize({
 				dependencies: [
 					{ src: 'plugin/markdown/marked.js' },
 					{ src: 'plugin/markdown/markdown.js' },
 					{ src: 'plugin/notes/notes.js', async: true },
-					{ src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } }
+					{ src: 'plugin/highlight/highlight.js',
+                      async: true,
+                      callback: function() { hljs.initHighlightingOnLoad(); }
+                    },
+                    { src: 'https://d3js.org/d3.v4.min.js' },
+                    { src: 'node_modules/reveal.js-d3js/d3js.js' }
 				]
 			});
 		</script>
