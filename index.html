@@ -15,6 +15,7 @@
 
 		<!-- Theme used for syntax highlighting of code -->
 		<link rel="stylesheet" href="lib/css/zenburn.css">
+        <link rel="stylesheet" type="text/css" href="css/index.css">
 
 		<!-- Printing and PDF exports -->
 		<script>
@@ -24,13 +25,14 @@
 			link.href = window.location.search.match( /print-pdf/gi ) ? 'css/print/pdf.css' : 'css/print/paper.css';
 			document.getElementsByTagName( 'head' )[0].appendChild( link );
 		</script>
+
 	</head>
 	<body>
 		<div class="reveal">
 			<div class="slides">
 
 <!-- --------------------------------------------------------------------
-                           MOTIVATION
+                           Intro
      -------------------------------------------------------------------- -->
 
 <section>
@@ -61,6 +63,13 @@
         I'll wrap up with some research context and future directions.
     </aside>
 </section>
+
+<!-- --------------------------------------------------------------------
+                           MOTIVATION
+     -------------------------------------------------------------------- -->
+
+<section id="modivation">
+    <h1>Motivation</h1>
 
 <section id="parsing-just-enough">
     <h2>Parsing Just Enough</h2>
@@ -229,14 +238,518 @@ END:VCARD
         when I say a subset of the grammar to be partially parsed.
     </aside>
 </section>
+</section>
 
 <!-- --------------------------------------------------------------------
                            NECESSARY BACKGROUND
      -------------------------------------------------------------------- -->
 
-<!-- TODO: Step Back and Cover the VM approach -->
-<!-- TODO: Talk about the dotstar scan -->
-<!-- TODO: Talk about the elit scan -->
+<section id="background">
+    <h1>Background</h1>
+<!-- FALLTHROUGH -->
+
+<section id="background-real">
+    <ul>
+        <li class="fragment">Virtual Machines</li>
+        <li class="fragment">Compiling Regex</li>
+    </ul>
+
+    <aside class="notes">
+        Before I can tell you about all the cool ways that we can
+        take advantage of that asterisks, I'm going to take a step
+        back and tell you about how NFA simulations are implemented.
+    </aside>
+</section>
+
+<section id="nfavms">
+    <h2>NFA VMs</h2>
+
+    <pre>
+
+        <span class="fragment highlight-green"
+              data-fragment-index="1"><span
+                class="fragment highlight-white"
+              data-fragment-index="2">save 0</span></span>
+        <span class="fragment highlight-green"
+              data-fragment-index="2"><span
+                class="fragment highlight-white"
+              data-fragment-index="3"><span
+                class="fragment highlight-green"
+              data-fragment-index="4"><span
+                class="fragment highlight-white"
+              data-fragment-index="5"><span
+                class="fragment highlight-green"
+              data-fragment-index="6">L1: char 'a'</span></span></span></span></span>
+        <span class="fragment highlight-green"
+              data-fragment-index="3"><span
+                class="fragment highlight-white"
+              data-fragment-index="4"><span
+                class="fragment highlight-green"
+              data-fragment-index="5"><span
+                class="fragment highlight-white"
+              data-fragment-index="6">split L1 L2</span></span></span></span>
+        <span class="fragment highlight-green"
+              data-fragment-index="4"><span
+                class="fragment highlight-white"
+              data-fragment-index="5"><span
+                class="fragment highlight-green"
+                data-fragment-index="6">L2: char 'b'</span></span></span>
+        <span class="fragment highlight-green"
+              data-fragment-index="5"><span
+                class="fragment highlight-white"
+              data-fragment-index="6">save 1</span></span>
+        <span class="fragment highlight-green"
+              data-fragment-index="6">match</span>
+    </pre>
+
+    <aside class="notes">
+        In order to implement regex we use a special VM that
+        has special character matching instructions and support
+        for non-determinism built right in. The VM executes a number
+        of threads which each have some instruction pointer and some
+        string pointer. I'm about to explain what all these instructions
+        do, but for now I just want you to get a feel for how multiple
+        threads of execution are simultaneously moving through different
+        points in the program.
+    </aside>
+</section>
+
+<section id="base-instructions">
+    <table style="float: left;">
+        <tr>
+            <td><pre>save n</pre></td>
+            <td>Save the current string index in slot n.</td>
+        </tr>
+        <tr>
+            <td><pre>char a</pre></td>
+            <td>Kill thread if input[string index] is not in a.</td>
+        </tr>
+        <tr>
+            <td><pre>jmp L</pre></td>
+            <td>Goto label L.</td>
+        </tr>
+        <tr>
+            <td><pre>split L1 L2</pre></td>
+            <td>Goto L1, spawn a new thread at L2.</td>
+        </tr>
+        <tr>
+            <td><pre>match</pre></td>
+            <td>We made it!</td>
+        </tr>
+    </table>
+
+    <aside class="notes">
+        This should make what was going on in that last slide a little
+        clearer. These instructions are all you need to execute conventional
+        regex, and I'm going to show you how to do that right now.
+    </aside>
+</section>
+
+<section id="compiling">
+    <div class="codefunc">
+    <table style="float: right;">
+        <tr>
+            <td>code((e))</td>
+            <td>
+                <pre>
+save n
+code(e)
+save (n+1)</pre>
+            </td>
+        </tr>
+        <tr>
+            <td>code(e1 e2)</td>
+            <td>
+                <pre>
+code(e1)
+code(e2)</pre>
+            </td>
+        </tr>
+        <tr>
+            <td>code(e1|e2)</td>
+            <td>
+                <pre>
+split L1 L2
+L1: code(e1)
+jmp L3
+L2: code(e2)
+L3:</pre>
+            </td>
+        </tr>
+    </table>
+
+    <table style="float: left;">
+        <tr>
+            <td>code(a)</td>
+            <td>
+                <pre>char a</pre>
+            </td>
+        </tr>
+        <tr>
+            <td>code(e*)</td>
+            <td>
+                <pre>
+split L1 L2
+L1: code(e)
+split L1 L2
+L2:</pre>
+            </td>
+        </tr>
+        <tr>
+            <td>code(e+)</td>
+            <td>
+                <pre>
+L1: code(e)
+split L1 L2
+L3:</pre>
+            </td>
+        </tr>
+        <tr>
+            <td>code(.)</td>
+            <td>
+                <pre>char SIGMA</pre>
+            </td>
+        </tr>
+    </table>
+    </div>
+
+    <aside class="notes">
+        Once you've defined the VM, the translation from regex
+        to instructions just sort of falls out. If you want to
+        learn more about this stuff Russ Cox has a really great
+        blog post. Note that capture groups are compiled to use
+        the save instruction. That n is a counter which increments
+        by 2 for ever capture group. Also note that the split instruction
+        is sufficient to deal with all of the non-determinism
+        inherent in regex.
+    </aside>
+</section>
+
+<section id="skip-instructions">
+    <h2>Skip Instructions</h2>
+    <table style="float: left;">
+        <tr>
+            <td><pre>skip n</pre></td>
+            <td>Skip forward in the input by n.</td>
+        </tr>
+        <tr>
+            <td><pre>scan-begin lit</pre></td>
+            <td>Scan forward to lit and stop at the beginning.</td>
+        </tr>
+        <tr>
+            <td><pre>scan-end lit</pre></td>
+            <td>Scan forward to lit and stop at the end.</td>
+        </tr>
+        <tr>
+            <td><pre>goto-end</pre></td>
+            <td>Just go to the end of the input.</td>
+        </tr>
+    </table>
+
+    <aside class="notes">
+        <p>
+        I had to add a few extra instructions in order to support the
+        optimizations that I implemented. They all enable us to avoid
+        looking at some part of the input or look at it a lot faster.
+        One thing that I didn't know going into this is that substring
+        search is a lot faster than even regex DFAs. There are sub-linear
+        algorithms to get it done really really fast, and special
+        hardware to get it done even faster than that.
+        </p>
+
+        <p>
+        Figuring out how to use these new instructions is a bit
+        more complex than compiling to the standard set of instructions.
+        I'm going to spend the rest of my talk doing that.
+        </p>
+    </aside>
+</section>
+
+</section> <!-- background -->
+
+
+<!-- --------------------------------------------------------------------
+                           .* Opt
+     -------------------------------------------------------------------- -->
+
+<section id="dotstar-opt">
+<h1>.*l Optimization</h1>
+
+<section id="dotstar-why">
+    <table>
+        <tr>
+            <td>Spawning threads is expensive</td>
+            <td>
+                <pre class="fragment highlight-red">
+split L1 L2
+L1: char SIGMA
+split L1 L2
+L2: char 'f'
+char 'o'
+char 'o'
+</pre></td>
+        </tr>
+
+        <tr>
+            <td>Scanning forward is cheap</td>
+            <td><pre class="fragment highlight-green">scan-end 'foo'</pre></td>
+        </tr>
+    </table>
+
+    <aside class="notes">
+        <p>
+        The first optimization I'm going to talk about is
+        optimizing .* followed by a literal. When I write regular expressions,
+        I very frequently find myself writing "match anything,
+        stop when you see this". The problem is that that .*
+        involves spawning a new thread <i>for every character
+        of input</i>.
+        </p>
+
+        <p>
+        So we want to turn this into this.
+        </p>
+    </aside>
+</section>
+
+<section id="dotstar-problem">
+    <h1>Problem!</h1>
+    <div style="float: left;">
+    /.*foox*/
+    </div>
+
+    <div style="float: right;">
+    <span class="fragment fade-out"
+        data-fragment-index="3">aaaaa</span><span class="fragment highlight-red"
+            data-fragment-index="1">foo</span>ooooooo<span
+        class="fragment highlight-green"
+        data-fragment-index="2">foo</span>xxxxx
+    </div>
+
+    <div style="padding-top: 150px;">
+    <pre>
+<span class="fragment" data-fragment-index="2">L1: </span>scan-end 'foo'
+<span class="fragment" data-fragment-index="2">split L1 L2
+L2:</span></pre>
+    <div>
+
+    <aside class="notes">
+        <p>
+        There is a problem with just compiling straight to scan-end.
+        What if there is an occurrence of foo in the part of the input
+        that is supposed to match the .*? This example should clearly
+        match, but if we just compile straight to a scan instruction
+        it wont. The solution is to add a non-deterministic split.
+        </p>
+
+        <p>
+        Now if you've been paying attention, you might have noticed
+        that there is still one less split instruction than what
+        we had before. That's ok because the single split instruction
+        will handle the case where there are zero repeated elements
+        just fine.
+        </p>
+    </aside>
+</section>
+
+</section> <!-- dotstar-opt -->
+
+<!-- --------------------------------------------------------------------
+                           el Opt
+     -------------------------------------------------------------------- -->
+
+<section id="elit-scan">
+
+<section id="elit-why">
+    <h2>el Optimization</h2>
+
+    <span class="fragment">/<span
+        class="fragment highlight-red">(?:we|are|having|a| )*</span>blast/</span>
+
+    <pre class="fragment">scan-end 'blast'</pre>
+    
+    <aside class="notes">
+        <p>
+        Personally, I think this is the coolest optimization I
+        have to share with you today. Our goal is pretty much the
+        same as it was for the .* optimization, but this time
+        we are going to get to throw out that non-determinism
+        entirely.
+        </p>
+
+        <p>
+        This regex is an example of one that would benefit from
+        this optimization. That weird question mark colon syntax is
+        how you ask rust regex for a non-capturing grouping.
+        Starting off the regex we have an
+        expensive expression with two different sources of
+        non-determinism. We could decide it, but it would
+        involve all sorts of thread juggling. But notice
+        that "blast" can never appear in that leading expression.
+        So we could just implement it with this code.
+        </p>
+    </aside>
+</section>
+
+<section id="elit-but-how">
+    <h2>When is it okay to do this?</h2>
+
+    <p class="fragment">l &in; L(/e/)</p>
+    <p class="fragment">L(/e/) &cap; L(/.*l.*/) = &empty;</p>
+
+    <aside class="notes">
+        The key to figuring out when it is ok to do this is
+        our ability to decide this question NEXT. Restated in
+        terms of set intersection that question becomes NEXT.
+    </aside>
+</section>
+
+<section id="elit-lang-intersection1">
+    <p>L(/aa/) &cap; L(/ab/) = &empty;</p>
+
+    <div class="fragment">
+    <img src="./resources/aa-nfa.png" />
+    <img src="./resources/ab-nfa.png" />
+    </div>
+
+    <aside class="notes">
+        I want to consider this intersection problem a bit more generally,
+        so we are actually just going to focus on determining if the intersection
+        of two different regular languages is empty. Each regular language
+        has a corresponding NFA NEXT. For these two languages the NFAs
+        are pretty simple. We can take the intersection of them by
+        constructing a new NFA where the state set is the Cartesian
+        product of the state sets of the two NFAs we want to intersect,
+        then adding transitions only where both could make progress.
+    </aside>
+</section>
+
+<section id="elit-lang-intersection2">
+    <p class="fragment highlight-green">L(/aa/) &cap; L(/ab/) = &empty;</p>
+
+    <img src="./resources/aa-intersect-ab.png" />
+
+    <aside class="notes">
+        Here is the intersection of those two NFAs. You'll note that there
+        aren't as many states as there ought to be if I was really
+        taking the full Cartesian product. I've left off the intermediary orphan
+        states to keep it small. This NFA obviously can never match, so
+        its language is the empty set.
+    </aside>
+</section>
+
+<section id="elit-lang-intersection3">
+    <p>L(/aa/) &cap; L(/a*/) = &empty;</p>
+
+    <img src="./resources/aa-nfa.png" />
+    <img src="./resources/astar-nfa.png" />
+
+    <aside class="notes">
+        Here is a slightly more complicated example
+    </aside>
+</section>
+
+<section id="elit-lang-intersection4">
+    <p class="fragment highlight-red">L(/aa/) &cap; L(/a*/) = &empty;</p>
+
+    <img src="./resources/aa-intersect-astar.png" />
+
+    <aside class="notes">
+        And as you can see we can trace a path from the start state to
+        the end state, so the two languages intersect.
+    </aside>
+</section>
+
+<section id="elit-biggest1">
+    /<span
+    class="fragment highlight-green"
+    data-fragment-index="1"><span
+    class="fragment highlight-white"
+    data-fragment-index="2">lit0</span></span> e ... <span
+    class="fragment highlight-green"
+    data-fragment-index="2"><span
+    class="fragment highlight-white"
+    data-fragment-index="3">e lit1</span></span>e ... <span
+    class="fragment highlight-green"
+    data-fragment-index="3"><span
+    class="fragment highlight-white"
+    data-fragment-index="4">e lit2</span></span> e ... <span
+    class="fragment highlight-green"
+    data-fragment-index="4"><span
+    class="fragment highlight-white"
+    data-fragment-index="5">e litn</span></span>/
+
+    <aside class="notes">
+        So that's the key piece of analysis we have to do in order to
+        apply this optimization, but there is still quite a bit
+        of leeway about how we go about doing so. The most obvious
+        way is to step though the literals in order, trying to
+        optimize each one in turn.
+    </aside>
+</section>
+
+<section id="elit-biggest2">
+    /<span
+    class="fragment highlight-green"
+    data-fragment-index="1"><span
+    class="fragment highlight-white"
+    data-fragment-index="2">lit0</span></span><span
+    class="fragment highlight-green"
+    data-fragment-index="2"><span
+    class="fragment highlight-white"
+    data-fragment-index="4"><span
+    class="fragment highlight-white"
+    data-fragment-index="3">e ...</span> e lit1</span></span><span
+    class="fragment highlight-green"
+    data-fragment-index="4"><span
+    class="fragment highlight-white"
+    data-fragment-index="6"><span
+    class="fragment highlight-white"
+    data-fragment-index="5">e ...</span> e lit2</span></span><span
+    class="fragment highlight-green"
+    data-fragment-index="6"><span
+    class="fragment highlight-white"
+    data-fragment-index="8"><span
+    class="fragment highlight-white"
+    data-fragment-index="7">e ...</span> e litn</span></span>/
+
+    <aside class="notes">
+        But if we just do that we might miss out on skipping over
+        a bigger expression. It would be better if we looked at
+        larger chunks of expressions first, then kept trying
+        with smaller and smaller chunks.
+    </aside>
+</section>
+
+<section id="elit-biggest3">
+    /<span class="fragment highlight-green"
+        data-fragment-index="1"
+    ><span
+        class="fragment highlight-white"
+        data-fragment-index="2"
+    >lit0</span><span
+        class="fragment highlight-white"
+        data-fragment-index="3">e</span><span
+        class="fragment highlight-white"
+        data-fragment-index="4">... e lit1</span><span
+        class="fragment highlight-white"
+        data-fragment-index="5">e ... e <span
+        class="fragment highlight-green"
+        data-fragment-index="6">lit2</span> e ... e</span><span
+        class="fragment highlight-white"
+        data-fragment-index="6">litn</span></span>/
+
+    <aside class="notes">
+        Of course that still misses the case where one literal
+        can actually skip over another. To do better we have to
+        start from the back and try the whole preceding expression,
+        then keep walking back. Only once we've tried the whole range
+        of possibilities can we move on to the next literal.
+    </aside>
+</section>
+
+</section> <!-- elit-scan -->
+
 <!-- TODO: Talk about the literal skip scan -->
 <!-- TODO: Talk about my skip backtracker -->
 

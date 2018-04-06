@@ -1,0 +1,14 @@
+/* Special CSS for my presentation */
+
+.codefunc td {
+    text-align: center;
+    vertical-align: middle;
+}
+
+.codefunc pre {
+    width: 100%;
+}
+
+table pre {
+    width: 100%;
+}

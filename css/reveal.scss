@@ -170,6 +170,8 @@ body {
 	}
 }
 
+.reveal .slides section .fragment.highlight-white,
+.reveal .slides section .fragment.highlight-current-white,
 .reveal .slides section .fragment.highlight-red,
 .reveal .slides section .fragment.highlight-current-red,
 .reveal .slides section .fragment.highlight-green,
@@ -188,6 +190,9 @@ body {
 	.reveal .slides section .fragment.highlight-blue.visible {
 		color: #1b91ff;
 	}
+	.reveal .slides section .fragment.highlight-white.visible {
+		color: #ffffff;
+	}
 
 .reveal .slides section .fragment.highlight-current-red.current-fragment {
 	color: #ff2c2d
@@ -197,6 +202,9 @@ body {
 }
 .reveal .slides section .fragment.highlight-current-blue.current-fragment {
 	color: #1b91ff;
+}
+.reveal .slides section .fragment.highlight-current-white.current-fragment {
+	color: #ffffff;
 }
 
 
