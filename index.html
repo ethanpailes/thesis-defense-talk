@@ -749,8 +749,638 @@ L2:</span></pre>
 
 </section> <!-- elit-scan -->
 
-<!-- TODO: Talk about the literal skip scan -->
-<!-- TODO: Talk about my skip backtracker -->
+<section id="lit-skip">
+
+<section id="lit-skip-why">
+    <h2>Literal Skip Optimization</h2>
+
+    <span class="fragment">/foo/</span>
+
+    <pre class="fragment">skip 3</pre>
+    
+    <aside class="notes">
+        The idea behind this optimization is probably the simplest
+        of the optimizations that I'm going to show you. If you have
+        a regex with a statically knowable length, you can just compile
+        it to a skip instruction. This lets us parse certain regex in
+        constant time!
+    </aside>
+</section>
+
+<section id="lit-skip-problem1">
+    <h2>What about |</h2>
+
+    <span class="fragment">/foo(.)|bar(.)/</span>
+    &nbsp;
+    &nbsp;
+    &nbsp;
+    &nbsp;
+    &nbsp;
+    &nbsp;
+    <span class="fragment">barx</span>
+
+    <table>
+        <tr>
+            <td class="fragment">
+                <pre>
+save 0
+split L1 L2
+L1: skip 3
+save 2
+skip 1
+save 3
+L2: ...
+save 1
+match</pre>
+                
+                <span class="fragment highlight-red">captures[1] == x</span>
+            </td>
+            <td class="fragment">
+                <pre>
+save 0
+split L1 L2
+L1: char 'f'
+...
+L2: <span class="fragment fade-out">char 'b'
+skip 2</span>
+<span class="fragment">skip 3</span>
+save 4
+skip 1
+save 5
+save 1
+match</pre>
+                
+                <span class="fragment highlight-green">captures[2] == x</span>
+            </td>
+        </tr>
+    </table>
+
+    <aside class="notes">
+        <p>
+        Unfortunatly the story is not quite that simple. If a literal
+        begins one of the branches of an alternative expression, just
+        skipping forward will not be enough. If you look at this example
+        you can see that just blindly skipping forward by 3 to skip
+        over "foo" will cause the "x" to get captured in the wrong slot.
+        </p>
+
+        <p> To fix this we can emit a charicter test at the front of
+        each of the literals. This will ensure than any threads which
+        might lead to an incorrect match will die before they manage
+        it. Actually, by the time we get to the last branch we know
+        that it has to match by process of elimination, so we don't
+        have to emit that charicter test. We can just go right into
+        the skip. And that will give us an x in the second capture group,
+        which is right.
+        </p>
+    </aside>
+</section>
+
+<section>
+    <h2>What about *</h2>
+
+    e1*e2*...en*eterm
+
+    <aside class="notes">
+        This concern about compiling literals to skips shows up
+        any time there is a branch in the VM program, and repetitions
+        are the other way to introduce branching. You have to do
+        simillar sort of analysis, using the bodies of different
+        repetitions instead of the different arms of an
+        alternative.
+    </aside>
+</section>
+
+<section id="lit-skip-problem2.1">
+    <h2>What if you can't tell with a char test?</h2>
+
+    <span class="fragment">apples|alex</span>
+
+    <aside class="notes">
+        Sometimes you can't tell the difference between two
+        branches just by issuing a single char instruction. To identify
+        these cases we check if the expressions in the arms of the alternative
+        have intersecting first sets.
+    </aside>
+</section>
+
+<section id="fsets">
+    <h2>Short Digression: First Sets</h2>
+
+    <table>
+        <tr>
+            <td>fset(a)</td>
+            <td>{a}</td>
+        </tr>
+        <tr>
+            <td>fset(e1|e2)</td>
+            <td>fset(e1) &cup; fset(e2)</td>
+        </tr>
+        <tr>
+            <td>fset(e*)</td>
+            <td>fset(e) &cup; {&epsilon;}</td>
+        </tr>
+        <tr>
+            <td>fset(.)</td>
+            <td>&Sigma;</td>
+        </tr>
+        <tr>
+            <td>fset((e))</td>
+            <td>fset(e)</td>
+        </tr>
+    </table>
+
+    <aside class="notes">
+        The first set of any regular expression is the set of characters
+        which might begin it. You can compute the first set
+        recursively is really natural.
+    </aside>
+</section>
+
+<section id="lit-skip-problem2.2">
+    <h2>What if you can't tell with a char test?</h2>
+
+    apples|alex
+
+    <br>
+
+    <span class="fragment">a(?:pples|lex)</span>
+
+    <aside class="notes">
+        <p>
+        Now we can tell that one char instruction won't be enough
+        if the first sets of any of the branches intersect. Then
+        we give up.
+        </p>
+
+        <p> I'd like to point out that this particular expression is
+            not totally hopeless. We could re-write it in a form that
+            would not require us to give up. This sort of re-writing
+            is one thing that I would want to spend more time on if
+            I had it, but for now we just do the safe thing.
+        </p>
+        <!--
+        If
+        one of the first sets contain epsilon we need to examine
+        the next instruction that comes along.
+        -->
+    </aside>
+</section>
+
+</section>
+
+<section id="backends">
+
+<section id="skip-backtracker">
+    <h2>A Backend: The Skip Backtracker</h2>
+
+    <ul>
+        <li>One Copy of the Capture Slots</li>
+        <li>Prevents Exponential Blowup with a Bitset</li>
+    </ul>
+
+    <aside class="notes">
+        <p>
+        I wrote two different backends to execute the code, but
+        the one I ended up relying on the most was called the skip
+        backtracker. Most regular expressions are implemented using
+        a backtracking NFA simulation. Backtracking implementations
+        are quite fast because you can keep just a single copy of
+        the capture slots. Rob Pike's extension of Thomson's original
+        implementation requires a separate copy of the slots for each
+        thread. Juggling these capture slots can get expensive.
+        </p>
+        <p>
+        Many people know that common regular expression implimentations
+        suffer from so called "pathological cases" where the engine
+        takes a huge amount of time to complete. What many people don't
+        realize is that this is completely avoidable so long as you give
+        up back-references. If you don't support back-references, a
+        thread's history does not matter, and it is uniquely identified
+        by the tuple of its string pointer and its instruction pointer.
+        Then you can keep a bitset indicating all the states that the
+        execution can possibly be in, and just never enter the same
+        state twice.
+        </p>
+    </aside>
+</section>
+
+<section id="skip-pikevm">
+    <h2>A Backend: The Skip Pike VM</h2>
+
+    <ul>
+        <li>Sometimes faster when the regex and input are large.</li>
+        <li>Can't handle greedy vs lazy disambiguation.</li>
+    </ul>
+
+    <aside class="notes">
+        <p>I'm not going to say much about my Pike VM implementation,
+           because it is both fairly complex and rarely useful. It basically
+           just runs a collection of threads in a window over the
+           input, and enforces the fact that all live threads fall in
+           that window. The technology is pretty interesting, so if you
+           want to learn more, you can come talk to me afterwards.
+        </p>
+    </aside>
+</section>
+
+</section>
+
+<section id="microbenchmarks">
+
+<section id="microbenchmarks-intro">
+    <h2>Micro Benchmarks</h2>
+
+    <aside class="notes">
+        <p>
+        I'm now going to try to provide a performance picture.
+        The optimizations I implemented can provide a speedup
+        of anything from 0 percent to a million percent, so
+        I don't want to give you a single summary number.
+        </p>
+
+        <p>
+        Microbenchmarks are not a good way to develop a comprehensive
+        performance picture, but they are excellent for illustrating
+        performance edge cases. I'm going to use them to highlight
+        the best and worst cases for skip regex.
+        </p>
+    </aside>
+</section>
+
+<section id="microbenchmarks-a-big-skip">
+    <h2>A Big Skip</h2>
+
+    /<span style="color: green;">aaaa</span>(bbbb)<span style="color: green;">cccc</span>/ &nbsp; &nbsp;
+    <span style="color: green;">aaaa</span>bbbb<span style="color: green;">cccc</span>
+
+    <br>
+
+    <img src="./resources/a-big-skip.png">
+
+    <aside class="notes">
+        <p>
+        All the microbenchmarks I'm going to show you will have a
+        regular expression template and some input template. Some
+        portion of the input will be repeated according to a scaling
+        factor. I've highlighted the repeating section in green.
+        </p>
+
+        <p>
+        This particular benchmark is showing how the literal skip
+        optimization can result in constant time operation. I
+        believe the slight curve to the backtracker performance
+        comes from the fact that smaller bitsets are cheaper to
+        initialize.
+        </p>
+    </aside>
+</section>
+
+<section id="microbenchmarks-leading-dotstar">
+    <h2>Leading .*</h2>
+
+    /.*(aaaa)/ &nbsp; &nbsp; <span style="color: green;">b</span>aaaa
+
+    <br>
+
+    <img src="./resources/leading-dotstar.png">
+
+    <aside class="notes">
+        <p>
+        This benchmark is showing the best case scenario for
+        the .* optimization. It is going to find the terminator
+        and will only have to pay the cost of a single branch
+        back to retry.
+        </p>
+    </aside>
+</section>
+
+<section id="microbenchmarks-dotstar-bounce">
+    <h2>.* Bounce</h2>
+
+    /.*a(bbbb)/ &nbsp; &nbsp; <span style="color: green;">ca</span>bbbb
+
+    <br>
+
+    <img src="./resources/dotstar-bounce.png">
+
+    <aside class="notes">
+        <p>
+        This benchmark is showing the worst case scenario for
+        the .* optimization. Here the literal terminator is
+        "a". Longer terminators are better, so this is already
+        bad. Much worse is the fact that every two characters
+        of input, a new thread will have to be split off, and
+        each one of these new threads has to context switch between
+        the NFA sim inner loop and the substring searcher.
+        </p>
+        <p>
+        This scenario seems much less likely than the last one
+        to me, but that's just a sort of anecdotal intuition.
+        </p>
+    </aside>
+</section>
+
+<section id="microbenchmarks-leading-estar-scan">
+    <h2>Leading el</h2>
+
+    /a*foo(bar)/ &nbsp; &nbsp; <span style="color: green;">a</span>foobar
+
+    <br>
+
+    <img src="./resources/leading-estar.png">
+
+    <aside class="notes">
+        <p>
+        This benchmark shows the best case for the el optimization.
+        I won't have a worst case for you because we always statically
+        prove that we will find the terminator. The numbers for those
+        skip backends are actually increasing, but substring search is
+        so much faster than an NFA simulation that you can't really see it.
+        </p>
+    </aside>
+</section>
+
+<section id="microbenchmarks-trailing-dotstar">
+    <h2>Leading el</h2>
+
+    /(a+).*/ &nbsp; &nbsp; <span style="color: green;">ab</span>
+
+    <br>
+
+    <img src="./resources/aplus-trailing.png">
+
+    <aside class="notes">
+        <p>
+        This shows the benefits of the goto-end instruction. Note
+        that the "a" and "b" are repeated separately not as a group.
+        </p>
+    </aside>
+</section>
+
+<section id="microbenchmarks-no-opt">
+    <h2>No Opt</h2>
+
+    /(ab|ac)*/ &nbsp; &nbsp; <span style="color: green;">ab</span>
+
+    <br>
+
+    <img src="./resources/justtwo-branch.png">
+
+    <aside class="notes">
+        <p>
+        This shows a case that can't be optimized. It shows some slight
+        differences in the constant factors of the different engines.
+        </p>
+        <p>
+        The difference in perf for the Pike VMs is probably due to the
+        more complicated thread juggling logic I had to implement. The
+        backtrackers are much closer.
+        </p>
+    </aside>
+</section>
+</section> <!-- microbenchmarks -->
+
+<section id="case-study">
+<section id="kafka-wat">
+    <h2>Kafka Diagnostics: A Case Study</h2>
+
+    <aside class="notes">
+        <p>
+        The microbenchmarks I just showed you should help
+        outline the outside of the performance envelope,
+        but now I want to go into a more realistic scenario.
+        Apache Kafka is a distributed queueing system, and
+        like most network applications, it has grown up
+        with integrated logging. I wanted use skip regex to
+        pull out some summary information about a kafka cluster
+        that I set up.
+        </p>
+        <p>
+        To generate data to work with I stood up a Kafka cluster
+        with a single "test" topic, set it to log as promiscuously
+        as possible and used a simple python script
+        to write and read a bunch of messages. The script is on github
+        along with all the code for this case study for those of you
+        who are interested.
+        </p>
+    </aside>
+</section>
+
+<section id="append-events">
+    <h2>Summarizing Append Events</h2>
+
+    <pre class="fragment">[2018-02-15 11:39:30,073] TRACE Appended message
+set to log test-0 with first offset: 1000, next offset: 1001, and
+messages: [(record=DefaultRecord(offset=1000, timestamp=-1,
+key=0 bytes, value=14 bytes))] (kafka.log.Log)</pre>
+
+    <pre class="fragment">/^.* with first offset: ([0-9]+).*value=([0-9]+).*$/</pre>
+
+    <aside class="notes">
+        <p>
+        One of the core operations you can perform on a Kafka
+        queue is appending a message. Every time something is appended
+        to a queue, it emits a line like this one. I wanted to scrape
+        these lines and figure out the range of offsets that had
+        been used as well as the total number of bytes appended to
+        the log. I used this regex to pull out the offset and number of
+        bytes.
+        </p>
+        <p>
+        One thing thats worth noting is that I used skip regex in
+        pre-validated mode here, so there was zero difference from
+        a usage perspective. I just selected the skip backend and
+        used it in exactly the same way I normally would have. I applied
+        the regex, then if it matched parsed the two capture groups
+        and updated a current min and max offset seen as well as a
+        total number of bytes appended.
+        </p>
+    </aside>
+</section>
+
+<section id="append-graph">
+    <h2>Performance on 25M of Input</h2>
+
+    <div style="display: flex; align-items: center; ">
+        <div style="float: left;">
+            <img height="400px" src="./resources/append.png">
+        </div>
+
+        <ul style="float: right; font-size: 20pt;">
+            <li class="fragment">26.03% improvement in user time.</li>
+            <li class="fragment">Only 3.51% of lines matched</li>
+        </ul>
+    </div>
+
+    <aside class="notes">
+        <p>
+        When I ran this summary task on 25M of input I saw a roughly
+        25 percent improvement in performance, and this was despite
+        the fact that a very low number of lines matched. This should
+        not be too surprising considering that Amdahl's Law tells us
+        that improvements to the slowest part of the system result
+        in the biggest speed improvements. The DFA is fast, so
+        improvements to the NFA have a disproportionate impact.
+        </p>
+    </aside>
+</section>
+
+<section id="append-graph-just-append">
+    <h2>Performance on 848K of Matching Input</h2>
+
+    <img height="400px" src="./resources/append-just-match.png">
+
+    <aside class="notes">
+        <p>
+        To show the NFA performance alone, I stripped out the 
+        matching lines. Predictably, things got a little better.
+        </p>
+    </aside>
+</section>
+
+<section id="scheduled-task">
+    <h2>Summarizing Scheduled Tasks</h2>
+
+    <pre class="fragment">[2018-02-15 11:39:25,728] TRACE Beginning execution
+    of scheduled task 'isr-expiration'. (kafka.utils.KafkaScheduler)</pre>
+
+    <pre class="fragment">/.* scheduled task '(.+?)'.*/</pre>
+
+
+    <aside class="notes">
+        <p>
+        Kafka also has a lot of scheduled tasks that it executes.
+        I wanted to learn more about them, and figure out which
+        tasks were the most common. I decided to use this regular
+        expression to extract the task names and build a histogram
+        of them.
+        </p>
+    </aside>
+</section>
+
+<section id="scheduled-graph">
+    <h2>Performance on 25M of Input</h2>
+
+    <img height="400px" src="./resources/named.png">
+
+    <aside class="notes">
+        <p>The improvement here was even better. This is probably
+           because many more of the input lines had to do with
+           scheduled tasks. This is a pretty common event.
+        </p>
+    </aside>
+</section>
+
+<section id="scheduled-graph">
+    <h2>Joint Performance on 25M of Input</h2>
+
+    <img height="400px" src="./resources/append-named.png">
+
+    <aside class="notes">
+        <p>And these were the results when I ran both analysis 
+           tasks at once.
+        </p>
+    </aside>
+</section>
+
+</section> <!-- case-study -->
+
+<section id="crates-io">
+    <h2>How often are these optimizations useful?</h2>
+
+    <ul>
+        <li class="fragment">82.8% of crates.io regex could be optimized.</li>
+        <li class="fragment">74.1% could have a skip.</li>
+        <li class="fragment"><span
+            class="fragment highlight-red">
+            15.0% could make use of a scan.</span></li>
+    <ul>
+
+    <aside class="notes">
+        So far I've shown you examples that I had some hand
+        in creating, so now I want to talk about how frequenty
+        these optimizations are useful in practice. To get a
+        picture of how applicable these optimizations are
+        I scraped crates.io, the rust library repository.
+        In my opinion, this 15% number is the weakest result
+        I have to show you. Scans have the biggest practical
+        potential to improve things. It's worth noting that the
+        crate.io sample was probably biased towards more complex
+        library style crates. I think these numbers are decent, but
+        not paradigm shattering.
+    </aside>
+</section>
+
+<section id="related-work">
+    <h2>Related Work</h2>
+
+    <ul>
+        <li class="fragment">Gallant - rust-lang/regex</li>
+        <li class="fragment">Cox - RE2</li>
+        <li class="fragment">Chivers - Previews</li>
+        <li class="fragment">... many more</li>
+    <ul>
+
+    <aside class="notes">
+        I benefited from a very rich literature and implementation
+        tradition. My work would not have been nearly so pleasant
+        if Andrew Gallant had not done some serious trailblazing
+        of typesafe regex implementation. Most of the ideas in
+        rust-lang/regex were first explored by Russ Cox in his
+        re2 regex engine. Howard Chivers has a series of regex
+        optimizations to NFA simulations based off of extracting 
+        "preview DFAs" from regular expressions that bear a
+        few similarities to the optimizations I just told you
+        about. Our implementations are complimentary. I don't
+        want to spend too much time on this, but if you read
+        my thesis there is a lot more.
+    </aside>
+</section>
+
+<section id="future-work">
+    <h2>Future Work</h2>
+
+    <ul>
+        <li class="fragment">Formalize Correctness Proof.</li>
+        <li class="fragment">PADS integration.</li>
+        <li class="fragment">Add support for unicode and case folding.</li>
+        <li class="fragment">Cost Model.</li>
+    <ul>
+
+    <aside class="notes">
+        If I had more time to work on this there are a few different
+        areas that I would want to work on. Right now my correctness
+        criterion is a set of unit tests and some informal reasoning;
+        I'd like more time to firm that up. This was originally conceived
+        in terms of improving PADS, so extending the ideas here to
+        apply to PADS is a natural next step. I omitted a few features
+        supported by rust-lang/regex for development speed. It would
+        be nice to fill those holes. Right now I just have some
+        precedence rules for the optimizations I perform, an
+        actual cost model seems like a worthwhile thing to have.
+    </aside>
+</section>
+
+<section id="future-work">
+    <h2>Takeaways</h2>
+
+    <ul>
+        <li class="fragment">Current regex engines decide languages once too many times.</li>
+        <li class="fragment">Parsing need not include deciding.</li>
+        <li class="fragment">NFA simulation &lt;&lt; DFA &lt;&lt; Substring Search</li>
+    <ul>
+
+    <aside class="notes">
+        If you walk away from this talk with just three takeaways I want
+        you to remember that current engines decide regex twice when they
+        have to parse something, parsing a regex does not need to include
+        deciding it, and this relationship is a good rule of thumb for
+        thinking about regex performance.
+    </aside>
+</section>
+
+<!-- TODO: Take Aways -->
 
 <!-- --------------------------------------------------------------------
                              REVEAL.JS FOOTER 
