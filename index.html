@@ -1,6 +1,42 @@
 <!doctype html>
 <html>
 	<head>
+
+<!-- 
+    My node highlighting does not really show up. Learn d3.js.
+
+    Norman is going to make noises about my color scheme. (red/green
+    use). See if the red and green have different grayscale.
+
+    Make my graphs have consistant shapes. Add another python dictionary!
+
+    Use the questionmark equals instead of just an equals sign when I'm
+    going over the intersection decision problem.
+
+    Break the NFA intersection slides up a little bit. Probably the first
+    example.
+
+    SPEAKING FEEDBACK:
+
+    I'm running out of air while talking. Need to pause after switching
+    to a big slide.
+
+    After I bring up PADS, give people a reminder about what it is
+    whenever I bring it up again.
+
+    Give people reminders about what a capture group is.
+
+    I don't give enough time for people to digest first sets.
+
+    The literal highlighting of different expressions when talking
+    about the literal scan optimization needs verbal crutches.
+
+    I got a little lost describing the performance of the case study.
+
+    If I'm going to have graphs of any kind, walk the adience though
+    the graph. "Higher is worse.", "Scaling factor works this way."
+-->
+
 <!-- --------------------------------------------------------------------
                              REVEAL.JS HEADER
      -------------------------------------------------------------------- -->
@@ -11,7 +47,7 @@
 		<title>Skip Regex</title>
 
 		<link rel="stylesheet" href="css/reveal.css">
-		<link rel="stylesheet" href="css/theme/black.css">
+		<link rel="stylesheet" href="css/theme/white.css">
 
 		<!-- Theme used for syntax highlighting of code -->
 		<link rel="stylesheet" href="lib/css/zenburn.css">
@@ -46,7 +82,7 @@
         <span class="fragment"><li>Partial Parsing</li></span>
         <span class="fragment"><li>NFA Simulation Background</li></span>
         <span class="fragment"><li>Optimizations</li></span>
-        <span class="fragment"><li>Simulation Changes</li></span>
+        <span class="fragment"><li>NFA Simulation Backends</li></span>
         <span class="fragment"><li>Evaluation</li></span>
         <span class="fragment"><li>Wrap Up</li></span>
     </ol>
@@ -82,12 +118,12 @@ FN:<span class="fragment highlight-green"
          data-fragment-index="2">Forrest Gump</span>
 ORG:Bubba Gump Shrimp Co.
 TITLE:Shrimp Man
-PHOTO;VALUE=URI;TYPE=GIF: <span style="color: yellow;">...</span>
+PHOTO;VALUE=URI;TYPE=GIF: <span style="color: #9966ff;">...</span>
 TEL;TYPE=WORK,VOICE: <span class="fragment highlight-red"
                            data-fragment-index="3">(111) 555-1212</span>
 TEL;TYPE=HOME,VOICE: <span class="fragment highlight-red"
                            data-fragment-index="3">(404) 555-1212</span>
-<span style="color: yellow;">...</span>
+<span style="color: #9966ff;">...</span>
 EMAIL:forrestgump@example.com
 REV:2008-04-24T19:52:43Z
 END:VCARD</pre>
@@ -182,7 +218,7 @@ END:VCARD</pre>
 </section>
 
 <section id="asterix">
-    <h2>*: The Partial Parsing Invariant
+    <h2>*: The Partial Parsing Assumption
     </h2>
 
     <p class="fragment">
@@ -211,8 +247,9 @@ END:VCARD</pre>
     <h2>Partially Parsing Regex</h2>
     <ul>
         <li>Constrained Semantics</li>
-        <li>Built-In Notion of a Partial Parse</li>
         <li>A Strict Subset of PADS</li>
+        <li>Built-In Notion of a Partial Parse</li>
+        <li>Friendly Performance Quirks</li>
     <ul>
 
     <aside class="notes">
@@ -237,6 +274,35 @@ END:VCARD</pre>
         when I say a subset of the grammar to be partially parsed.
     </aside>
 </section>
+
+<section>
+    <h2>Friendly Performance Quirks</h2>
+
+    <ul>
+        <li class="fragment">DFAs can't easily perform submatch extraction.</li>
+        <li class="fragment">NFAs Simulation &lt;&lt; DFA Execution &lt;&lt; Substring Search</li>
+    <ul>
+
+    <aside class="notes">
+        I want to explain what I mean when I say that regular expression
+        parsing has some performance quirks that are friendly to partial
+        parsing. Deciding and parsing regular expression happens at very
+        different speeds. In fact, because of the relationship between
+        all the different problems in play in a regex engine, a DFA is
+        often used to find matching text even before an NFA is executed.
+
+        To see why this makes sense, imagine trying to extract all the
+        arguments to a particular C++ template class with a regex
+        capture group. Most of the source code you search over won't
+        contain that template class, so running the NFA is a waste.
+        The DFA is already good enough to disgard those lines. You only
+        need the NFA for the small subset of lines which actually match.
+
+        This means that skip regex can actually provide a performance
+        improvement, even when we require the input to be decided!
+    </aside>
+</section>
+
 </section>
 
 <!-- --------------------------------------------------------------------
@@ -267,35 +333,35 @@ END:VCARD</pre>
 
         <span class="fragment highlight-green"
               data-fragment-index="1"><span
-                class="fragment highlight-white"
+                class="fragment highlight-black"
               data-fragment-index="2">save 0</span></span>
         <span class="fragment highlight-green"
               data-fragment-index="2"><span
-                class="fragment highlight-white"
+                class="fragment highlight-black"
               data-fragment-index="3"><span
                 class="fragment highlight-green"
               data-fragment-index="4"><span
-                class="fragment highlight-white"
+                class="fragment highlight-black"
               data-fragment-index="5"><span
                 class="fragment highlight-green"
               data-fragment-index="6">L1: char 'a'</span></span></span></span></span>
         <span class="fragment highlight-green"
               data-fragment-index="3"><span
-                class="fragment highlight-white"
+                class="fragment highlight-black"
               data-fragment-index="4"><span
                 class="fragment highlight-green"
               data-fragment-index="5"><span
-                class="fragment highlight-white"
+                class="fragment highlight-black"
               data-fragment-index="6">split L1 L2</span></span></span></span>
         <span class="fragment highlight-green"
               data-fragment-index="4"><span
-                class="fragment highlight-white"
+                class="fragment highlight-black"
               data-fragment-index="5"><span
                 class="fragment highlight-green"
                 data-fragment-index="6">L2: char 'b'</span></span></span>
         <span class="fragment highlight-green"
               data-fragment-index="5"><span
-                class="fragment highlight-white"
+                class="fragment highlight-black"
               data-fragment-index="6">save 1</span></span>
         <span class="fragment highlight-green"
               data-fragment-index="6">match</span>
@@ -424,8 +490,10 @@ L3:</pre>
     </aside>
 </section>
 
+</section> <!-- background -->
+
 <section id="skip-instructions">
-    <h2>Skip Instructions</h2>
+    <h2>Extension: Skip Instructions</h2>
     <table style="float: left;">
         <tr>
             <td><pre>skip n</pre></td>
@@ -463,9 +531,6 @@ L3:</pre>
         </p>
     </aside>
 </section>
-
-</section> <!-- background -->
-
 
 <!-- --------------------------------------------------------------------
                            .* Opt
@@ -514,7 +579,7 @@ char 'o'
 <section id="dotstar-problem">
     <h1>Problem!</h1>
     <div style="float: left;">
-    /.*foox*/
+    /.*foox+/
     </div>
 
     <div style="float: right;">
@@ -663,19 +728,19 @@ L2:</span></pre>
     /<span
     class="fragment highlight-green"
     data-fragment-index="1"><span
-    class="fragment highlight-white"
+    class="fragment highlight-black"
     data-fragment-index="2">lit0</span></span> e ... <span
     class="fragment highlight-green"
     data-fragment-index="2"><span
-    class="fragment highlight-white"
+    class="fragment highlight-black"
     data-fragment-index="3">e lit1</span></span>e ... <span
     class="fragment highlight-green"
     data-fragment-index="3"><span
-    class="fragment highlight-white"
+    class="fragment highlight-black"
     data-fragment-index="4">e lit2</span></span> e ... <span
     class="fragment highlight-green"
     data-fragment-index="4"><span
-    class="fragment highlight-white"
+    class="fragment highlight-black"
     data-fragment-index="5">e litn</span></span>/
 
     <aside class="notes">
@@ -691,25 +756,25 @@ L2:</span></pre>
     /<span
     class="fragment highlight-green"
     data-fragment-index="1"><span
-    class="fragment highlight-white"
+    class="fragment highlight-black"
     data-fragment-index="2">lit0</span></span><span
     class="fragment highlight-green"
     data-fragment-index="2"><span
-    class="fragment highlight-white"
+    class="fragment highlight-black"
     data-fragment-index="4"><span
-    class="fragment highlight-white"
+    class="fragment highlight-black"
     data-fragment-index="3">e ...</span> e lit1</span></span><span
     class="fragment highlight-green"
     data-fragment-index="4"><span
-    class="fragment highlight-white"
+    class="fragment highlight-black"
     data-fragment-index="6"><span
-    class="fragment highlight-white"
+    class="fragment highlight-black"
     data-fragment-index="5">e ...</span> e lit2</span></span><span
     class="fragment highlight-green"
     data-fragment-index="6"><span
-    class="fragment highlight-white"
+    class="fragment highlight-black"
     data-fragment-index="8"><span
-    class="fragment highlight-white"
+    class="fragment highlight-black"
     data-fragment-index="7">e ...</span> e litn</span></span>/
 
     <aside class="notes">
@@ -724,18 +789,18 @@ L2:</span></pre>
     /<span class="fragment highlight-green"
         data-fragment-index="1"
     ><span
-        class="fragment highlight-white"
+        class="fragment highlight-black"
         data-fragment-index="2"
     >lit0</span><span
-        class="fragment highlight-white"
+        class="fragment highlight-black"
         data-fragment-index="3">e</span><span
-        class="fragment highlight-white"
+        class="fragment highlight-black"
         data-fragment-index="4">... e lit1</span><span
-        class="fragment highlight-white"
+        class="fragment highlight-black"
         data-fragment-index="5">e ... e <span
         class="fragment highlight-green"
         data-fragment-index="6">lit2</span> e ... e</span><span
-        class="fragment highlight-white"
+        class="fragment highlight-black"
         data-fragment-index="6">litn</span></span>/
 
     <aside class="notes">
@@ -1082,7 +1147,7 @@ match</pre>
 </section>
 
 <section id="microbenchmarks-leading-estar-scan">
-    <h2>Leading el</h2>
+    <h2>Leading e*</h2>
 
     /a*foo(bar)/ &nbsp; &nbsp; <span style="color: green;">a</span>foobar
 
@@ -1362,13 +1427,13 @@ key=0 bytes, value=14 bytes))] (kafka.log.Log)</pre>
     </aside>
 </section>
 
-<section id="future-work">
+<section>
     <h2>Takeaways</h2>
 
     <ul>
         <li class="fragment">Current regex engines decide languages once too many times.</li>
         <li class="fragment">Parsing need not include deciding.</li>
-        <li class="fragment">NFA simulation &lt;&lt; DFA &lt;&lt; Substring Search</li>
+        <li class="fragment">NFA Simulation &lt;&lt; DFA &lt;&lt; Substring Search</li>
     <ul>
 
     <aside class="notes">
@@ -1379,8 +1444,6 @@ key=0 bytes, value=14 bytes))] (kafka.log.Log)</pre>
         thinking about regex performance.
     </aside>
 </section>
-
-<!-- TODO: Take Aways -->
 
 <!-- --------------------------------------------------------------------
                              REVEAL.JS FOOTER 
