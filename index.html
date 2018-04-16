@@ -3,11 +3,6 @@
 	<head>
 
 <!-- 
-    Make my graphs have consistant shapes. Add another python dictionary!
-
-    Break the NFA intersection slides up a little bit. Probably the first
-    example.
-
     SPEAKING FEEDBACK:
 
     I'm running out of air while talking. Need to pause after switching
@@ -680,13 +675,72 @@ L2:</span></pre>
     </aside>
 </section>
 
-<!-- TODO: add some extra slides that step through the construction of
-    the intersecting NFA.
-        First place all the potential states.
-        Next begin placing edges. (Consider at least one case where we don't
-            place an edge).
-        Finally, drop the orphan states.
-  -->
+<section id="elit-lang-intersection2-s1">
+    <p>L(/aa/) &cap; L(/ab/) &#x225f; &empty;</p>
+
+    <img style="height: 400px" src="./resources/aa-intersect-ab-step1.png" />
+
+    <aside class="notes">
+        To construct an NFA which decides the intersection of two
+        NFAs we first create a set of states by taking the cartesian
+        product of the set of states of the two input NFAs.
+    </aside>
+</section>
+
+<section id="elit-lang-intersection2-s2">
+    <p>L(/aa/) &cap; L(/ab/) &#x225f; &empty;</p>
+
+    <img style="height: 400px" src="./resources/aa-intersect-ab-step2.png" />
+
+    <aside class="notes">
+        Now, we add edges whereever both NFAs could make
+        progress. Can we ever transition from state 0
+        in the 'ab' machine to state 1 while remaining
+        in state 0 for the 'aa' machine?
+    </aside>
+</section>
+
+<section style="height: 400px" id="elit-lang-intersection2-s3">
+    <p>L(/aa/) &cap; L(/ab/) &#x225f; &empty;</p>
+
+    <img src="./resources/aa-intersect-ab-step3.png" />
+
+    <aside class="notes">
+        No we can't. How about transitioning from state
+        0 0 to state 1 1. Both can make progress on
+        an 'a', so...
+    </aside>
+</section>
+
+<section style="height: 400px" id="elit-lang-intersection2-s4">
+    <p>L(/aa/) &cap; L(/ab/) &#x225f; &empty;</p>
+
+    <img src="./resources/aa-intersect-ab-step4.png" />
+
+    <aside class="notes">
+        That works.
+    </aside>
+</section>
+
+<section style="height: 400px" id="elit-lang-intersection2-s5">
+    <p>L(/aa/) &cap; L(/ab/) &#x225f; &empty;</p>
+
+    <img src="./resources/aa-intersect-ab-step5.png" />
+
+    <aside class="notes">
+        Can we make it to the accepting state?
+    </aside>
+</section>
+
+<section style="height: 400px" id="elit-lang-intersection2-s6">
+    <p>L(/aa/) &cap; L(/ab/) &#x225f; &empty;</p>
+
+    <img src="./resources/aa-intersect-ab-step6.png" />
+
+    <aside class="notes">
+        No.
+    </aside>
+</section>
 
 <section id="elit-lang-intersection2">
     <p class="fragment highlight-green">L(/aa/) &cap; L(/ab/) &#x225f; &empty;</p>
@@ -694,11 +748,8 @@ L2:</span></pre>
     <img src="./resources/aa-intersect-ab.png" />
 
     <aside class="notes">
-        Here is the intersection of those two NFAs. You'll note that there
-        aren't as many states as there ought to be if I was really
-        taking the full Cartesian product. I've left off the intermediary orphan
-        states to keep it small. This NFA obviously can never match, so
-        its language is the empty set.
+        Now I'll prune off the orphan states. This NFA obviously can
+        never match, so its language is the empty set.
     </aside>
 </section>
 
