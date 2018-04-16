@@ -3,15 +3,7 @@
 	<head>
 
 <!-- 
-    My node highlighting does not really show up. Learn d3.js.
-
-    Norman is going to make noises about my color scheme. (red/green
-    use). See if the red and green have different grayscale.
-
     Make my graphs have consistant shapes. Add another python dictionary!
-
-    Use the questionmark equals instead of just an equals sign when I'm
-    going over the intersection decision problem.
 
     Break the NFA intersection slides up a little bit. Probably the first
     example.
@@ -658,7 +650,7 @@ L2:</span></pre>
 <section id="elit-but-how">
     <h2>When is it okay to do this?</h2>
 
-    <p class="fragment">l &in; L(/e/)</p>
+    <p class="fragment">l &notin; L(/e/)</p>
     <p class="fragment">L(/e/) &cap; L(/.*l.*/) = &empty;</p>
 
     <aside class="notes">
@@ -669,7 +661,7 @@ L2:</span></pre>
 </section>
 
 <section id="elit-lang-intersection1">
-    <p>L(/aa/) &cap; L(/ab/) = &empty;</p>
+    <p>L(/aa/) &cap; L(/ab/) &#x225f; &empty;</p>
 
     <div class="fragment">
     <img src="./resources/aa-nfa.png" />
@@ -688,8 +680,16 @@ L2:</span></pre>
     </aside>
 </section>
 
+<!-- TODO: add some extra slides that step through the construction of
+    the intersecting NFA.
+        First place all the potential states.
+        Next begin placing edges. (Consider at least one case where we don't
+            place an edge).
+        Finally, drop the orphan states.
+  -->
+
 <section id="elit-lang-intersection2">
-    <p class="fragment highlight-green">L(/aa/) &cap; L(/ab/) = &empty;</p>
+    <p class="fragment highlight-green">L(/aa/) &cap; L(/ab/) &#x225f; &empty;</p>
 
     <img src="./resources/aa-intersect-ab.png" />
 
@@ -703,7 +703,7 @@ L2:</span></pre>
 </section>
 
 <section id="elit-lang-intersection3">
-    <p>L(/aa/) &cap; L(/a*/) = &empty;</p>
+    <p>L(/aa/) &cap; L(/a*/) &#x225f; &empty;</p>
 
     <img src="./resources/aa-nfa.png" />
     <img src="./resources/astar-nfa.png" />
@@ -714,7 +714,7 @@ L2:</span></pre>
 </section>
 
 <section id="elit-lang-intersection4">
-    <p class="fragment highlight-red">L(/aa/) &cap; L(/a*/) = &empty;</p>
+    <p class="fragment highlight-red">L(/aa/) &cap; L(/a*/) &#x225f; &empty;</p>
 
     <img src="./resources/aa-intersect-astar.png" />
 
@@ -943,7 +943,7 @@ match</pre>
         </tr>
         <tr>
             <td>fset(e*)</td>
-            <td>fset(e) &cup; {&epsilon;}</td>
+            <td>fset(e)</td>
         </tr>
         <tr>
             <td>fset(.)</td>
