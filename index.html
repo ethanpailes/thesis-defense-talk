@@ -20,7 +20,7 @@
 
     I got a little lost describing the performance of the case study.
 
-    If I'm going to have graphs of any kind, walk the adience though
+    If I'm going to have graphs of any kind, walk the audience though
     the graph. "Higher is worse.", "Scaling factor works this way."
 -->
 
@@ -66,7 +66,7 @@
 <section>
     <h2>Talk Roadmap</h2>
     <ol>
-        <span class="fragment"><li>Partial Parsing</li></span>
+        <span class="fragment"><li>The Problem: Partial Parsing</li></span>
         <span class="fragment"><li>NFA Simulation Background</li></span>
         <span class="fragment"><li>Optimizations</li></span>
         <span class="fragment"><li>NFA Simulation Backends</li></span>
@@ -74,16 +74,14 @@
         <span class="fragment"><li>Wrap Up</li></span>
     </ol>
     <aside class="notes">
-        This talk is about optimizations to regex NFA simulations.
-        Before I get into that I'm going to spend a bit of time
-        going over the problem I'm trying to solve, then I'm going
-        to give you a whirlwind tour of how fast NFA simulations
-        are implemented in practice.  Once you understand that,
-        you will have enough context to understand the optimizations
-        that I've implemented and the modifications to the simulation
-        algorithms that I had to make. Next, I'll try to convince you
-        that the optimizations are worthwhile with numbers and stories.
-        I'll wrap up with some research context and future directions.
+        <ol>
+            <li>I will define the problem: partial parsing</li>
+            <li>I will go over nondeterminsitic finite automatons and how they are simulated.</li>
+            <li>I will present my optimizations</li>
+            <li>I will go over my NFA Simulation implementations</li>
+            <li>I will try to convince you that my opts are worthwhile</li>
+            <li>Wrap up with some related work and future directions</li>
+        <ol>
     </aside>
 </section>
 
@@ -282,11 +280,27 @@ END:VCARD</pre>
         arguments to a particular C++ template class with a regex
         capture group. Most of the source code you search over won't
         contain that template class, so running the NFA is a waste.
-        The DFA is already good enough to disgard those lines. You only
+        The DFA is already good enough to discard those lines. You only
         need the NFA for the small subset of lines which actually match.
 
         This means that skip regex can actually provide a performance
         improvement, even when we require the input to be decided!
+    </aside>
+</section>
+
+<section>
+    <h2>Optimization Goals</h2>
+
+    <ul>
+        <li class="fragment">Find places to skip.</li>
+        <li class="fragment">Find places to scan.</li>
+    <ul>
+
+    <aside class="notes">
+        This leaves us in a place where we are looking to optimize
+        submatch extraction by either just wholesale skipping forward
+        over the input, or finding places where we can recast part of
+        the problem in terms of substring search.
     </aside>
 </section>
 
@@ -296,12 +310,15 @@ END:VCARD</pre>
                            NECESSARY BACKGROUND
      -------------------------------------------------------------------- -->
 
+
 <section id="background">
     <h1>Background</h1>
 <!-- FALLTHROUGH -->
 
+
 <section id="background-real">
     <ul>
+        <li class="fragment">Non-deterministic Finite Automata</li>
         <li class="fragment">Virtual Machines</li>
         <li class="fragment">Compiling Regex</li>
     </ul>
@@ -313,16 +330,40 @@ END:VCARD</pre>
     </aside>
 </section>
 
+<section id="nfas">
+    <p>Non-Deterministic Finite Automata</p>
+    <img src="./fig/NFAexample.svg" height="400px;">
+
+    <aside class="notes">
+        <p>
+        Very quickly, any regular expression has a corresponding
+        nondeterministic finite automata which decides its language.
+        An NFA is a directed graph with annotated edges that indicate
+        how we should transition between states on various input.
+        It also includes so called epsilon edges which we follow
+        immediately whenever we see them. What makes it non-determinisitic
+        is that the execution splits whenever there are multiple transitions
+        on one character or an epsilon edge. Put another way, whenever
+        we get to one of those points we just copy the whole NFA and keep
+        executing the two versions simultaneously.
+        </p>
+
+        <p>
+        This NFA accepts strings with either an even number of zeros or
+        an even number of ones.
+        </p>
+    </aside>
+</section>
+
 <section id="nfavms">
     <h2>NFA VMs</h2>
 
     <pre>
-
-        <span class="fragment highlight-green"
+<span class="fragment highlight-green"
               data-fragment-index="1"><span
                 class="fragment highlight-black"
               data-fragment-index="2">save 0</span></span>
-        <span class="fragment highlight-green"
+<span class="fragment highlight-green"
               data-fragment-index="2"><span
                 class="fragment highlight-black"
               data-fragment-index="3"><span
@@ -332,7 +373,7 @@ END:VCARD</pre>
               data-fragment-index="5"><span
                 class="fragment highlight-green"
               data-fragment-index="6">L1: char 'a'</span></span></span></span></span>
-        <span class="fragment highlight-green"
+<span class="fragment highlight-green"
               data-fragment-index="3"><span
                 class="fragment highlight-black"
               data-fragment-index="4"><span
@@ -340,21 +381,28 @@ END:VCARD</pre>
               data-fragment-index="5"><span
                 class="fragment highlight-black"
               data-fragment-index="6">split L1 L2</span></span></span></span>
-        <span class="fragment highlight-green"
+<span class="fragment highlight-green"
               data-fragment-index="4"><span
                 class="fragment highlight-black"
               data-fragment-index="5"><span
                 class="fragment highlight-green"
                 data-fragment-index="6">L2: char 'b'</span></span></span>
-        <span class="fragment highlight-green"
+<span class="fragment highlight-green"
               data-fragment-index="5"><span
                 class="fragment highlight-black"
               data-fragment-index="6">save 1</span></span>
-        <span class="fragment highlight-green"
-              data-fragment-index="6">match</span>
-    </pre>
+<span class="fragment highlight-green"
+              data-fragment-index="6">match</span></pre>
 
     <aside class="notes">
+        <p>
+        I'm going to immediately move away from that abstract notion of
+        NFAs that I just showed you and which you have probably seen
+        in a computational theory course. Instead I'm going to talk
+        to you about an NFA VM.
+        </p>
+
+        <p>
         In order to implement regex we use a special VM that
         has special character matching instructions and support
         for non-determinism built right in. The VM executes a number
@@ -363,6 +411,7 @@ END:VCARD</pre>
         do, but for now I just want you to get a feel for how multiple
         threads of execution are simultaneously moving through different
         points in the program.
+        </p>
     </aside>
 </section>
 
@@ -475,6 +524,141 @@ L3:</pre>
         is sufficient to deal with all of the non-determinism
         inherent in regex.
     </aside>
+</section>
+
+<section id="apply-code0">
+    <p>code(a*b(c|d))</p>
+
+    <pre>
+<span style="color: green;">code(a*b(c|d))</span></pre>
+
+    <aside class="notes">
+        To make that a little more concrete, I'm going to step though an
+        example.
+    </aside>
+</section>
+
+<section id="apply-code1">
+    <p>code(a*b(c|d))</p>
+
+    <pre>
+code(a*)
+<span style="color: green;">code(b(c|d))</span></pre>
+</section>
+
+<section id="apply-code2">
+    <p>code(a*b(c|d))</p>
+
+    <pre>
+<span style="color: green;">code(a*)</span>
+code(b)
+code((c|d))</pre>
+</section>
+
+<section id="apply-code3">
+    <p>code(a*b(c|d))</p>
+
+    <pre>
+split L1 L2
+L1: <span style="color: green;">code(a)</span>
+split L1 L2
+L2:
+code(b)
+code((c|d))</pre>
+</section>
+
+<section id="apply-code4">
+    <p>code(a*b(c|d))</p>
+
+    <pre>
+split L1 L2
+L1: char a
+split L1 L2
+L2:
+<span style="color: green;">code(b)</span>
+code((c|d))</pre>
+</section>
+
+<section id="apply-code5">
+    <p>code(a*b(c|d))</p>
+
+    <pre>
+split L1 L2
+L1: char a
+split L1 L2
+L2:
+char b
+<span style="color: green;">code((c|d))</span></pre>
+</section>
+
+<section id="apply-code6">
+    <p>code(a*b(c|d))</p>
+
+    <pre>
+split L1 L2
+L1: char a
+split L1 L2
+L2:
+char b
+save 2
+<span style="color: green;">code(c|d)</span>
+save 3</pre>
+</section>
+
+<section id="apply-code7">
+    <p>code(a*b(c|d))</p>
+
+    <pre>
+split L1 L2
+L1: char a
+split L1 L2
+L2:
+char b
+save 2
+split L3 L4
+L3: <span style="color: green;">code(c)</span>
+jmp L5
+L4: <span style="color: green;">code(d)</span>
+L5:
+save 3</pre>
+</section>
+
+<section id="apply-code8">
+    <p>code(a*b(c|d))</p>
+
+    <pre>
+split L1 L2
+L1: char a
+split L1 L2
+L2:
+char b
+save 2
+split L3 L4
+L3: char c
+jmp L5
+L4: char d
+L5:
+save 3</pre>
+</section>
+
+<section id="apply-code9">
+    <p>code(a*b(c|d))</p>
+
+    <pre>
+save 0
+split L1 L2
+L1: char a
+split L1 L2
+L2:
+char b
+save 2
+split L3 L4
+L3: char c
+jmp L5
+L4: char d
+L5:
+save 3
+save 1</pre>
 </section>
 
 </section> <!-- background -->
