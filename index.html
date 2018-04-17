@@ -263,6 +263,8 @@ END:VCARD</pre>
 <section>
     <h2>Friendly Performance Quirks</h2>
 
+    <!-- TODO: introduce automata first. -->
+
     <ul>
         <li class="fragment">DFAs can't easily perform submatch extraction.</li>
         <li class="fragment">NFAs Simulation &lt;&lt; DFA Execution &lt;&lt; Substring Search</li>
@@ -291,6 +293,8 @@ END:VCARD</pre>
 <section>
     <h2>Optimization Goals</h2>
 
+    <!-- TODO: Use pictures/animations here instead. -->
+
     <ul>
         <li class="fragment">Find places to skip.</li>
         <li class="fragment">Find places to scan.</li>
@@ -309,7 +313,6 @@ END:VCARD</pre>
 <!-- --------------------------------------------------------------------
                            NECESSARY BACKGROUND
      -------------------------------------------------------------------- -->
-
 
 <section id="background">
     <h1>Background</h1>
@@ -840,6 +843,11 @@ L2:</span></pre>
 </section>
 
 <section id="elit-lang-intersection1">
+
+    <!-- TODO: drop or shorten this. I just need one slide. Just
+                say we construct an NFA from the NFAs of the sublanguages.
+                Don't go into any detail. -->
+
     <p>L(/aa/) &cap; L(/ab/) &#x225f; &empty;</p>
 
     <div class="fragment">
@@ -1337,6 +1345,8 @@ match</pre>
 </section>
 
 <section id="microbenchmarks-leading-dotstar">
+    <!-- TODO: make the benchmark ordering have a static order
+               rather than being based off of speed. -->
     <h2>Leading .*</h2>
 
     /.*(aaaa)/ &nbsp; &nbsp; <span style="color: green;">b</span>aaaa
